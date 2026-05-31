@@ -1,0 +1,252 @@
+# Latihan K-Means Clustering
+# Dataset  : Mall Customer Segmentation
+# Deskripsi: Dataset berisi data pelanggan mall berdasarkan
+#            usia, pendapatan tahunan, dan spending score.
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import MinMaxScaler
+from io import StringIO
+
+
+#  Membuat Sample Dataset (Mall Customers)
+
+np.random.seed(42)
+n = 200
+
+# Membuat data sintetis yang mencerminkan pola segmentasi pelanggan
+data_csv = """CustomerID,Genre,Age,Annual Income (k$),Spending Score (1-100)
+"""
+
+rows = []
+for i in range(1, n + 1):
+    genre = np.random.choice(["Male", "Female"])
+    # Cluster 1: Muda, income rendah, spending tinggi
+    # Cluster 2: Dewasa, income tinggi, spending tinggi
+    # Cluster 3: Paruh baya, income menengah, spending rendah
+    cluster = np.random.choice([1, 2, 3], p=[0.35, 0.35, 0.30])
+    if cluster == 1:
+        age = int(np.random.normal(25, 5))
+        income = int(np.random.normal(35, 8))
+        score = int(np.random.normal(75, 10))
+    elif cluster == 2:
+        age = int(np.random.normal(38, 7))
+        income = int(np.random.normal(80, 12))
+        score = int(np.random.normal(70, 12))
+    else:
+        age = int(np.random.normal(50, 8))
+        income = int(np.random.normal(55, 15))
+        score = int(np.random.normal(30, 12))
+
+    age = max(18, min(70, age))
+    income = max(15, min(137, income))
+    score = max(1, min(100, score))
+    rows.append(f"{i},{genre},{age},{income},{score}")
+
+csv_content = data_csv + "\n".join(rows)
+df = pd.read_csv(StringIO(csv_content))
+
+
+#  Eksplorasi Data
+
+print("=" * 55)
+print("  LATIHAN K-MEANS CLUSTERING - MALL CUSTOMER SEGMENTATION")
+print("=" * 55)
+
+print("\n[1] Informasi Dataset:")
+print(df.info())
+
+print("\n[2] 5 Data Pertama:")
+print(df.head())
+
+print("\n[3] Statistik Deskriptif:")
+print(df.describe())
+
+
+# Persiapan Data ? Pilih Fitur
+
+# Fitur yang digunakan: Annual Income & Spending Score
+fitur = df[["Annual Income (k$)", "Spending Score (1-100)"]]
+
+print("\n[4] Fitur yang digunakan untuk clustering:")
+print(fitur.head())
+
+
+#  Visualisasi Sebaran Data Awal
+
+plt.figure(figsize=(7, 5))
+plt.scatter(
+    fitur["Annual Income (k$)"],
+    fitur["Spending Score (1-100)"],
+    s=30, c="steelblue", alpha=0.6, edgecolors="white", linewidths=0.5
+)
+plt.xlabel("Annual Income (k$)")
+plt.ylabel("Spending Score (1-100)")
+plt.title("Sebaran Data Pelanggan Mall (Sebelum Clustering)")
+plt.tight_layout()
+plt.savefig("01_sebaran_data_awal.png", dpi=120)
+plt.close()
+print("\n[5] Plot sebaran data awal disimpan.")
+
+
+#  Normalisasi Data ? Min-Max Scaling
+
+scaler = MinMaxScaler()
+x_array = np.array(fitur)
+x_scaled = scaler.fit_transform(x_array)
+
+print("\n[6] Data setelah normalisasi (5 baris pertama):")
+print(x_scaled[:5])
+
+
+#  Menentukan K Optimal ? Elbow Method
+
+inertia = []
+k_range = range(1, 11)
+
+for k in k_range:
+    km = KMeans(n_clusters=k, random_state=42, n_init=10)
+    km.fit(x_scaled)
+    inertia.append(km.inertia_)
+
+plt.figure(figsize=(7, 4))
+plt.plot(k_range, inertia, marker="o", color="coral", linewidth=2)
+plt.xlabel("Jumlah Cluster (K)")
+plt.ylabel("Inertia (Within-Cluster SSE)")
+plt.title("Elbow Method ? Menentukan K Optimal")
+plt.xticks(k_range)
+plt.grid(True, linestyle="--", alpha=0.5)
+plt.tight_layout()
+plt.savefig("02_elbow_method.png", dpi=120)
+plt.close()
+
+print("\n[7] Nilai Inertia per K:")
+for k, val in zip(k_range, inertia):
+    print(f"   K={k} ? Inertia = {val:.4f}")
+print("   ? Dari grafik Elbow, K=3 dipilih sebagai nilai optimal.")
+
+
+# Membuat Model K-Means (K=3)
+
+K_OPTIMAL = 3
+
+kmeans = KMeans(n_clusters=K_OPTIMAL, random_state=42, n_init=10)
+kmeans.fit(x_scaled)
+
+# Tambahkan label cluster ke dataframe
+df["Kluster"] = kmeans.labels_
+
+print(f"\n[8] Model K-Means berhasil dibuat dengan K={K_OPTIMAL}")
+print("    Label cluster tiap data:")
+print(df["Kluster"].value_counts().sort_index().to_string())
+
+print("\n    5 data pertama dengan label cluster:")
+print(df.head())
+
+
+#  Koordinat Centroid (dikembalikan ke skala asli)
+
+centroids_scaled = kmeans.cluster_centers_
+centroids_original = scaler.inverse_transform(centroids_scaled)
+
+print("\n[9] Koordinat Centroid (skala asli):")
+for i, c in enumerate(centroids_original):
+    print(f"   Cluster {i}: Annual Income = {c[0]:.1f} k$, "
+          f"Spending Score = {c[1]:.1f}")
+
+
+# Visualisasi Hasil Clustering
+
+colors = ["#2196F3", "#4CAF50", "#FF9800"]
+labels_map = {0: "Cluster 0", 1: "Cluster 1", 2: "Cluster 2"}
+
+plt.figure(figsize=(8, 6))
+
+for kluster_id in range(K_OPTIMAL):
+    subset = df[df["Kluster"] == kluster_id]
+    plt.scatter(
+        subset["Annual Income (k$)"],
+        subset["Spending Score (1-100)"],
+        s=40, c=colors[kluster_id],
+        alpha=0.7, edgecolors="white", linewidths=0.4,
+        label=labels_map[kluster_id]
+    )
+
+# Plot centroid
+plt.scatter(
+    centroids_original[:, 0],
+    centroids_original[:, 1],
+    s=250, c="red", marker="X",
+    edgecolors="black", linewidths=0.8,
+    label="Centroid", zorder=5
+)
+
+plt.xlabel("Annual Income (k$)")
+plt.ylabel("Spending Score (1-100)")
+plt.title(f"K-Means Clustering (K={K_OPTIMAL}) ? Mall Customer Segmentation")
+plt.legend()
+plt.grid(True, linestyle="--", alpha=0.3)
+plt.tight_layout()
+plt.savefig("03_hasil_clustering.png", dpi=120)
+plt.close()
+print("\n[10] Visualisasi hasil clustering disimpan.")
+
+
+#  Analisis Per Cluster
+
+print("\n[11] Statistik Rata-rata Per Cluster:")
+ringkasan = df.groupby("Kluster")[
+    ["Age", "Annual Income (k$)", "Spending Score (1-100)"]
+].mean().round(2)
+print(ringkasan.to_string())
+
+
+# Visualisasi Distribusi Fitur per Cluster (Boxplot)
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+sns.boxplot(
+    data=df, x="Kluster", y="Annual Income (k$)",
+    palette=colors, ax=axes[0]
+)
+axes[0].set_title("Distribusi Annual Income per Cluster")
+axes[0].set_xlabel("Cluster")
+
+sns.boxplot(
+    data=df, x="Kluster", y="Spending Score (1-100)",
+    palette=colors, ax=axes[1]
+)
+axes[1].set_title("Distribusi Spending Score per Cluster")
+axes[1].set_xlabel("Cluster")
+
+plt.suptitle("Perbandingan Distribusi Fitur antar Cluster", fontsize=13)
+plt.tight_layout()
+plt.savefig("04_boxplot_cluster.png", dpi=120)
+plt.close()
+print("[12] Boxplot distribusi per cluster disimpan.")
+
+
+#  Interpretasi Cluster
+
+print("\n" + "=" * 55)
+print("  INTERPRETASI HASIL CLUSTERING")
+print("=" * 55)
+for idx, row in ringkasan.iterrows():
+    income = row["Annual Income (k$)"]
+    score  = row["Spending Score (1-100)"]
+    age    = row["Age"]
+    if score > 60:
+        tipe = "Pelanggan Aktif Belanja (Spending Tinggi)"
+    elif score < 45:
+        tipe = "Pelanggan Hemat (Spending Rendah)"
+    else:
+        tipe = "Pelanggan Moderat"
+    print(f"\n  Cluster {idx} ? {tipe}")
+    print(f"    Rata-rata Usia          : {age:.1f} tahun")
+    print(f"    Rata-rata Annual Income : {income:.1f} k$")
+    print(f"    Rata-rata Spending Score: {score:.1f}")
+
+print("\n? Semua proses selesai. File output tersimpan di folder outputs/")
